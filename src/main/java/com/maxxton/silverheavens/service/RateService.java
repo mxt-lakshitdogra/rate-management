@@ -239,6 +239,8 @@ public class RateService{
                 // Step 3: Remove the merged next rate from active list
                 ratesRepository.delete(next);
             }
+
+            
         }
     }
 
