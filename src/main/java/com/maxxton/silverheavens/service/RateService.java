@@ -180,9 +180,12 @@ public class RateService{
                 ratesRepository.save(after);
             }
 
-            if(oldRate.getBookDateFrom().isAfter(oldRate.getBookDateTo())){
+            // Clean up invalid records
+            if (oldRate.getBookDateFrom() != null && oldRate.getBookDateTo() != null &&
+                    oldRate.getBookDateFrom().isAfter(oldRate.getBookDateTo())) {
                 ratesRepository.delete(oldRate);
             }
+
         }
     }
 
@@ -236,6 +239,8 @@ public class RateService{
                 // Step 3: Remove the merged next rate from active list
                 ratesRepository.delete(next);
             }
+
+            
         }
     }
 
