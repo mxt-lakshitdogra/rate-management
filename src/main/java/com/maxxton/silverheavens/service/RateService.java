@@ -467,63 +467,63 @@ public class RateService{
      */
     public double calculatePrice(Long bungalowId, LocalDate arrival, LocalDate departure, LocalDate bookingDate) {
 
-    if (!arrival.isBefore(departure)) {
-        throw new IllegalArgumentException("Arrival date must be before departure date");
-    }
-
-    // Step 1: Fetch all rates (active + closed)
-    List<Rates> allRates = ratesRepository.findByBungalowIdOrderByStayDateFrom(bungalowId);
-
-    // Step 2: Separate active and closed rates
-    List<Rates> closedRates = allRates.stream()
-            .filter(r -> r.getBookDateTo() != null)
-            .toList();
-
-    List<Rates> activeRates = allRates.stream()
-            .filter(r -> r.getBookDateTo() == null)
-            .toList();
-
-    LocalDate current = arrival;
-    double totalPrice = 0.0;
-
-    while (!current.isEqual(departure)) {
-        Rates matchedRate = null;
-
-        // Step 3: Try closed (historical) rates first
-        for (Rates r : closedRates) {
-            if (!current.isBefore(r.getStayDateFrom())
-                    && !current.isAfter(r.getStayDateTo())
-                    && !bookingDate.isBefore(r.getBookDateFrom())
-                    && !bookingDate.isAfter(r.getBookDateTo())) {
-                matchedRate = r;
-                break;
-            }
+        if (!arrival.isBefore(departure)) {
+            throw new IllegalArgumentException("Arrival date must be before departure date");
         }
 
-        // Step 4: If not found, fall back to active rate
-        if (matchedRate == null) {
-            for (Rates r : activeRates) {
+        // Step 1: Fetch all rates (active + closed)
+        List<Rates> allRates = ratesRepository.findByBungalowIdOrderByStayDateFrom(bungalowId);
+
+        // Step 2: Separate active and closed rates
+        List<Rates> closedRates = allRates.stream()
+                .filter(r -> r.getBookDateTo() != null)
+                .toList();
+
+        List<Rates> activeRates = allRates.stream()
+                .filter(r -> r.getBookDateTo() == null)
+                .toList();
+
+        LocalDate current = arrival;
+        double totalPrice = 0.0;
+
+        while (!current.isEqual(departure)) {
+            Rates matchedRate = null;
+
+            // Step 3: Try closed (historical) rates first
+            for (Rates r : closedRates) {
                 if (!current.isBefore(r.getStayDateFrom())
                         && !current.isAfter(r.getStayDateTo())
-                        && !bookingDate.isBefore(r.getBookDateFrom())) {
+                        && !bookingDate.isBefore(r.getBookDateFrom())
+                        && !bookingDate.isAfter(r.getBookDateTo())) {
                     matchedRate = r;
                     break;
                 }
             }
+
+            // Step 4: If not found, fall back to active rate
+            if (matchedRate == null) {
+                for (Rates r : activeRates) {
+                    if (!current.isBefore(r.getStayDateFrom())
+                            && !current.isAfter(r.getStayDateTo())
+                            && !bookingDate.isBefore(r.getBookDateFrom())) {
+                        matchedRate = r;
+                        break;
+                    }
+                }
+            }
+
+            if (matchedRate == null) {
+                throw new RuntimeException("No rate found for date: " + current);
+            }
+
+            double perNight = matchedRate.getValue() / matchedRate.getNights();
+            totalPrice += perNight;
+
+            current = current.plusDays(1);
         }
 
-        if (matchedRate == null) {
-            throw new RuntimeException("No rate found for date: " + current);
-        }
-
-        double perNight = matchedRate.getValue() / matchedRate.getNights();
-        totalPrice += perNight;
-
-        current = current.plusDays(1);
+        return totalPrice;
     }
-
-    return totalPrice;
-}
 
 
 }
