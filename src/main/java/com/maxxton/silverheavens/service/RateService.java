@@ -482,7 +482,7 @@ public class RateService{
         }
 
         // Fetch rates for the bungalow
-        List<Rates> rates = ratesRepository.findByBungalowIdOrderByStayDateFrom(bungalowId);
+        List<Rates> rates = ratesRepository.findRelevantRates(bungalowId, arrival, departure, bookingDate);
         if (rates == null || rates.isEmpty()) {
             throw new RateNotFoundException("No rates configured for bungalow ID: " + bungalowId);
         }

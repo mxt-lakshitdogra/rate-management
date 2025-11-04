@@ -3,6 +3,9 @@ package com.maxxton.silverheavens.repository;
 import java.time.LocalDate;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
 import com.maxxton.silverheavens.entity.Rates;
 
 /**
@@ -11,6 +14,21 @@ import com.maxxton.silverheavens.entity.Rates;
  * based on booking validity and stay period rules for a specific bungalow.
  */
 public interface RateRepository extends JpaRepository<Rates, Long> {
+
+    @Query("""
+        SELECT r FROM Rates r
+        WHERE r.bungalowId = :bungalowId
+        AND r.stayDateTo >= :arrival
+        AND r.stayDateFrom <= :departure
+        AND (r.bookDateTo IS NULL OR r.bookDateTo >= :bookingDate)
+        AND r.bookDateFrom <= :bookingDate
+        ORDER BY r.stayDateFrom
+    """)
+    List<Rates> findRelevantRates(
+            @Param("bungalowId") Long bungalowId,
+            @Param("arrival") LocalDate arrival,
+            @Param("departure") LocalDate departure,
+            @Param("bookingDate") LocalDate bookingDate);
 
     /**
      * Retrieves active rate entries for a bungalow where booking end date is not defined,
