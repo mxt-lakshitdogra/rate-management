@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.maxxton.silverheavens.entity.Rates;
+import com.maxxton.silverheavens.exception.RateNotFoundException;
 import com.maxxton.silverheavens.repository.RateRepository;
 
 /**
@@ -466,60 +467,63 @@ public class RateService{
      * @throws RuntimeException if no valid rate is found for any night in the stay period
      */
     public double calculatePrice(Long bungalowId, LocalDate arrival, LocalDate departure, LocalDate bookingDate) {
-
+        // Validate inputs early
+        if (bungalowId == null) {
+            throw new IllegalArgumentException("Bungalow ID cannot be null");
+        }
+        if (arrival == null || departure == null) {
+            throw new IllegalArgumentException("Arrival and departure dates cannot be null");
+        }
+        if (bookingDate == null) {
+            throw new IllegalArgumentException("Booking date cannot be null");
+        }
         if (!arrival.isBefore(departure)) {
             throw new IllegalArgumentException("Arrival date must be before departure date");
         }
 
-        // Step 1: Fetch all rates (active + closed)
-        List<Rates> allRates = ratesRepository.findByBungalowIdOrderByStayDateFrom(bungalowId);
-
-        // Step 2: Separate active and closed rates
-        List<Rates> closedRates = allRates.stream()
-                .filter(r -> r.getBookDateTo() != null)
-                .toList();
-
-        List<Rates> activeRates = allRates.stream()
-                .filter(r -> r.getBookDateTo() == null)
-                .toList();
+        // Fetch rates for the bungalow
+        List<Rates> rates = ratesRepository.findByBungalowIdOrderByStayDateFrom(bungalowId);
+        if (rates == null || rates.isEmpty()) {
+            throw new RateNotFoundException("No rates configured for bungalow ID: " + bungalowId);
+        }
 
         LocalDate current = arrival;
         double totalPrice = 0.0;
 
-        while (!current.isEqual(departure)) {
-            Rates matchedRate = null;
+        try {
+            while (!current.isEqual(departure)) {
+                Rates matchedRate = null;
 
-            // Step 3: Try closed (historical) rates first
-            for (Rates r : closedRates) {
-                if (!current.isBefore(r.getStayDateFrom())
-                        && !current.isAfter(r.getStayDateTo())
-                        && !bookingDate.isBefore(r.getBookDateFrom())
-                        && !bookingDate.isAfter(r.getBookDateTo())) {
-                    matchedRate = r;
-                    break;
-                }
-            }
+                for (Rates r : rates) {
+                    boolean stayMatch = !current.isBefore(r.getStayDateFrom()) && !current.isAfter(r.getStayDateTo());
+                    boolean bookMatch = !bookingDate.isBefore(r.getBookDateFrom())
+                            && (r.getBookDateTo() == null || !bookingDate.isAfter(r.getBookDateTo()));
 
-            // Step 4: If not found, fall back to active rate
-            if (matchedRate == null) {
-                for (Rates r : activeRates) {
-                    if (!current.isBefore(r.getStayDateFrom())
-                            && !current.isAfter(r.getStayDateTo())
-                            && !bookingDate.isBefore(r.getBookDateFrom())) {
+                    if (stayMatch && bookMatch) {
                         matchedRate = r;
                         break;
                     }
                 }
+
+                if (matchedRate == null) {
+                    throw new RateNotFoundException("No applicable rate found for date: " + current);
+                }
+
+                // Defensive check for invalid data
+                if (matchedRate.getNights() == 0) {
+                    throw new IllegalArgumentException("Rate nights cannot be zero for date: " + current);
+                }
+
+                double perNight = matchedRate.getValue() / matchedRate.getNights();
+                totalPrice += perNight;
+                current = current.plusDays(1);
             }
-
-            if (matchedRate == null) {
-                throw new RuntimeException("No rate found for date: " + current);
-            }
-
-            double perNight = matchedRate.getValue() / matchedRate.getNights();
-            totalPrice += perNight;
-
-            current = current.plusDays(1);
+        } catch (RateNotFoundException e) {
+            // Re-throw known exception so GlobalExceptionHandler can handle gracefully
+            throw e;
+        } catch (Exception e) {
+            // Catch any unexpected issues, e.g. null fields inside rates
+            throw new RuntimeException("Error calculating price: " + e.getMessage(), e);
         }
 
         return totalPrice;
