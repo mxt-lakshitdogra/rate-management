@@ -8,13 +8,35 @@ import org.springframework.data.repository.query.Param;
 
 import com.maxxton.silverheavens.entity.Rates;
 
-/**
- * Repository for accessing and managing {@link Rates} data.
- * Provides a set of specialized query methods to retrieve pricing records
- * based on booking validity and stay period rules for a specific bungalow.
- */
-public interface RateRepository extends JpaRepository<Rates, Long> {
+    /**
+     * Repository for accessing and managing {@link Rates} data.
+     * Provides a set of specialized query methods to retrieve pricing records
+     * based on booking validity and stay period rules for a specific bungalow.
+     */
+    public interface RateRepository extends JpaRepository<Rates, Long> {
 
+    /**
+     * Fetches all {@link Rates} entries for a given bungalow that are relevant to a specific booking.
+     * <p>
+     * This query filters rates directly at the database level, returning only those that:
+     * <ul>
+     *   <li>Belong to the specified bungalow.</li>
+     *   <li>Have a stay period that overlaps with the provided arrival–departure window.</li>
+     *   <li>Are valid for the given booking date — meaning the booking date falls between
+     *       {@code bookDateFrom} and {@code bookDateTo} (or the rate is still active if {@code bookDateTo} is {@code null}).</li>
+     * </ul>
+     * The results are ordered chronologically by {@code stayDateFrom}.
+     * <p>
+     * Using this method instead of fetching all rates for a bungalow greatly reduces
+     * in-memory filtering and improves performance, especially for bungalows with large
+     * or historical rate tables.
+     *
+     * @param bungalowId the unique identifier of the bungalow whose rates should be fetched
+     * @param arrival the arrival date of the booking (inclusive)
+     * @param departure the departure date of the booking (exclusive)
+     * @param bookingDate the date on which the booking is made
+     * @return a list of {@link Rates} objects matching the bungalow, stay period, and booking date
+     */
     @Query("""
         SELECT r FROM Rates r
         WHERE r.bungalowId = :bungalowId
